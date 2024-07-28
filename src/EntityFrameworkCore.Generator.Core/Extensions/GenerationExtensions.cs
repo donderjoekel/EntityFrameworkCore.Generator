@@ -1,7 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.CodeDom;
 
 using EntityFrameworkCore.Generator.Metadata.Generation;
+
+using Microsoft.CSharp;
 
 namespace EntityFrameworkCore.Generator.Extensions;
 
@@ -99,13 +100,21 @@ public static class GenerationExtensions
 
     public static string ToType(this Type type, CodeLanguage language = CodeLanguage.CSharp)
     {
-        return ToType(type.FullName, language);
+        CSharpCodeProvider provider = new();
+        CodeTypeReference codeTypeReference = new(type, CodeTypeReferenceOptions.GlobalReference);
+        return provider.GetTypeOutput(codeTypeReference);
+
+        // return ToType(type.FullName, language);
     }
 
     public static string ToType(this string type, CodeLanguage language = CodeLanguage.CSharp)
     {
-        if (type == "System.Xml.XmlDocument")
-            type = "System.String";
+        // if (type == "System.Xml.XmlDocument")
+            // type = "System.String";
+
+        CSharpCodeProvider provider = new();
+        CodeTypeReference codeTypeReference = new(type, CodeTypeReferenceOptions.GlobalReference);
+        return provider.GetTypeOutput(codeTypeReference);
 
         if (language == CodeLanguage.CSharp && _csharpTypeAlias.TryGetValue(type, out string t))
             return t;

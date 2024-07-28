@@ -1,8 +1,9 @@
-using System.Linq;
-
 using EntityFrameworkCore.Generator.Extensions;
 using EntityFrameworkCore.Generator.Metadata.Generation;
 using EntityFrameworkCore.Generator.Options;
+
+using JsonApiDotNetCore.Resources;
+using JsonApiDotNetCore.Resources.Annotations;
 
 namespace EntityFrameworkCore.Generator.Templates;
 
@@ -18,10 +19,6 @@ public class EntityClassTemplate : CodeTemplateBase
     public override string WriteCode()
     {
         CodeBuilder.Clear();
-
-        CodeBuilder.AppendLine("using System;");
-        CodeBuilder.AppendLine("using System.Collections.Generic;");
-        CodeBuilder.AppendLine();
 
         CodeBuilder.Append($"namespace {_entity.EntityNamespace}");
 
@@ -64,7 +61,7 @@ public class EntityClassTemplate : CodeTemplateBase
         {
             var entityBaseClass = _entity.EntityBaseClass.ToSafeName();
             using (CodeBuilder.Indent())
-                CodeBuilder.AppendLine($": {entityBaseClass}");
+                CodeBuilder.AppendLine($": {entityBaseClass}, {typeof(IIdentifiable<int>).ToType()}");
         }
 
         CodeBuilder.AppendLine("{");
@@ -75,6 +72,7 @@ public class EntityClassTemplate : CodeTemplateBase
 
             GenerateProperties();
             GenerateRelationshipProperties();
+            GenerateIdentifiableProperties();
         }
 
         CodeBuilder.AppendLine("}");
@@ -109,11 +107,9 @@ public class EntityClassTemplate : CodeTemplateBase
 
                 var primaryNamespace = relationship.PrimaryEntity.EntityNamespace;
                 var primaryName = relationship.PrimaryEntity.EntityClass.ToSafeName();
-                var primaryFullName = _entity.EntityNamespace != primaryNamespace
-                    ? $"{primaryNamespace}.{primaryName}"
-                    : primaryName;
+                var primaryFullName = $"{primaryNamespace}.{primaryName}";
 
-                CodeBuilder.AppendLine($"{propertyName} = new HashSet<{primaryFullName}>();");
+                CodeBuilder.AppendLine($"{propertyName} = new {("System.Collections.Generic.HashSet<"+primaryFullName+">").ToType()}();");
             }
             CodeBuilder.AppendLine("#endregion");
         }
@@ -141,13 +137,11 @@ public class EntityClassTemplate : CodeTemplateBase
             }
 
             if (property.IsNullable == true && (property.SystemType.IsValueType || Options.Project.Nullable))
-                CodeBuilder.AppendLine($"public {propertyType}? {propertyName} {{ get; set; }}");
+                CodeBuilder.AppendLine($"[{typeof(AttrAttribute).ToType()}] public {propertyType}? {propertyName} {{ get; set; }}");
             else if (Options.Project.Nullable && !property.SystemType.IsValueType)
-                CodeBuilder.AppendLine($"public {propertyType} {propertyName} {{ get; set; }} = null!;");
+                CodeBuilder.AppendLine($"[{typeof(AttrAttribute).ToType()}] public {propertyType} {propertyName} {{ get; set; }} = null!;");
             else
-                CodeBuilder.AppendLine($"public {propertyType} {propertyName} {{ get; set; }}");
-
-            CodeBuilder.AppendLine();
+                CodeBuilder.AppendLine($"[{typeof(AttrAttribute).ToType()}] public {propertyType} {propertyName} {{ get; set; }}");
         }
         CodeBuilder.AppendLine("#endregion");
         CodeBuilder.AppendLine();
@@ -161,9 +155,7 @@ public class EntityClassTemplate : CodeTemplateBase
             var propertyName = relationship.PropertyName.ToSafeName();
             var primaryNamespace = relationship.PrimaryEntity.EntityNamespace;
             var primaryName = relationship.PrimaryEntity.EntityClass.ToSafeName();
-            var primaryFullName = _entity.EntityNamespace != primaryNamespace
-                ? $"{primaryNamespace}.{primaryName}"
-                : primaryName;
+            var primaryFullName = $"{primaryNamespace}.{primaryName}";
 
             if (relationship.Cardinality == Cardinality.Many)
             {
@@ -178,8 +170,7 @@ public class EntityClassTemplate : CodeTemplateBase
                 }
 
 
-                CodeBuilder.AppendLine($"public virtual ICollection<{primaryFullName}> {propertyName} {{ get; set; }}");
-                CodeBuilder.AppendLine();
+                CodeBuilder.AppendLine($"[{typeof(HasManyAttribute).ToType()}] public virtual {("System.Collections.Generic.ICollection<"+primaryFullName+">").ToType()} {propertyName} {{ get; set; }}");
             }
             else
             {
@@ -197,15 +188,47 @@ public class EntityClassTemplate : CodeTemplateBase
                 }
 
                 if (!Options.Project.Nullable)
-                    CodeBuilder.AppendLine($"public virtual {primaryFullName} {propertyName} {{ get; set; }}");
+                    CodeBuilder.AppendLine($"[{typeof(HasOneAttribute).ToType()}] public virtual {primaryFullName.ToType()} {propertyName} {{ get; set; }}");
                 else if (relationship.Cardinality == Cardinality.One)
-                    CodeBuilder.AppendLine($"public virtual {primaryFullName} {propertyName} {{ get; set; }} = null!;");
+                    CodeBuilder.AppendLine($"[{typeof(HasOneAttribute).ToType()}] public virtual {primaryFullName.ToType()} {propertyName} {{ get; set; }} = null!;");
                 else
-                    CodeBuilder.AppendLine($"public virtual {primaryFullName}? {propertyName} {{ get; set; }}");
-
-                CodeBuilder.AppendLine();
+                    CodeBuilder.AppendLine($"[{typeof(HasOneAttribute).ToType()}] public virtual {primaryFullName.ToType()}? {propertyName} {{ get; set; }}");
             }
         }
+        CodeBuilder.AppendLine("#endregion");
+        CodeBuilder.AppendLine();
+    }
+
+    private void GenerateIdentifiableProperties()
+    {
+        CodeBuilder.AppendLine("#region Generated IIdentifiable Properties");
+
+        CodeBuilder.AppendLine($"{typeof(string).ToType()} {typeof(IIdentifiable).ToType()}.StringId");
+        CodeBuilder.AppendLine("{");
+        using (CodeBuilder.Indent())
+        {
+            CodeBuilder.AppendLine("get => Id.ToString();");
+            CodeBuilder.AppendLine("set { }");
+        }
+        CodeBuilder.AppendLine("}");
+
+        CodeBuilder.AppendLine($"{typeof(string).ToType()} {typeof(IIdentifiable).ToType()}.LocalId");
+        CodeBuilder.AppendLine("{");
+        using (CodeBuilder.Indent())
+        {
+            CodeBuilder.AppendLine("get => null;");
+            CodeBuilder.AppendLine("set { }");
+        }
+        CodeBuilder.AppendLine("}");
+
+        CodeBuilder.AppendLine($"{typeof(int).ToType()} {typeof(IIdentifiable<int>).ToType()}.Id");
+        CodeBuilder.AppendLine("{");
+        using (CodeBuilder.Indent())
+        {
+            CodeBuilder.AppendLine("get => Id;");
+            CodeBuilder.AppendLine("set { }");
+        }
+        CodeBuilder.AppendLine("}");
         CodeBuilder.AppendLine("#endregion");
         CodeBuilder.AppendLine();
     }
